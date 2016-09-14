@@ -11,9 +11,19 @@ module RegexTimes
     return line
   end
 
-  # Inline `code text` gets turned to </pre>code text</pre>
-  def convert_inline_pre(line)
-    return line.gsub(/`([^`]*)`/, '<pre>\1</pre>')
+  # Handle inline conversions
+  def inline_conversions(line)
+    # Note the order
+    conversions = {
+      /\s*;;(.*)/ => '',                    # Comments
+      /`([^`]*)`/ => '<pre>\1</pre>',       # Inline code blocks
+      /\*([^\*]*)\*/ => '<em>\1</em>'       # Emphasized text
+    }
+    final = line
+    conversions.each do |regex_match, html_sub|
+      final = final.gsub(regex_match, html_sub)
+    end
+    return final
   end
 
   # Grab variable of the form '@name: value'
@@ -22,11 +32,6 @@ module RegexTimes
       return [$1, $2]
     end
     return nil
-  end
-
-  # Trim away comments (and leading whitespace) from line
-  def remove_comments(line)
-    return line.gsub(/\s*;;(.*)/, '')
   end
 
   # Merge @vars (with content and sans template) with template HTML string
@@ -49,7 +54,7 @@ end
 class HBHD
   include RegexTimes
   attr_reader :vars, :args
-  SPECIAL_LINES = ['#', '@']
+  NON_PARAGRAPH_LINES = ['#', '@', '>', ';;', '']
 
   private
   def read_file(path)
@@ -84,8 +89,17 @@ class HBHD
 
   # Add paragraph (<p>, </p>) tags at appropriate points
   def add_paragraph_tags(arr)
+    # Checks if line should be ignored wrt. paragraph tags
     def ignore_line?(line)
-      SPECIAL_LINES.include?(line[0]) || line == ''
+      NON_PARAGRAPH_LINES.each do |linetype|
+        end_idx = linetype.length - 1    # Used to compare linetypes
+        line_no_ws = line.strip          # Remove leading whitespace
+        # For empty lines, end_idx is -1, hence the first comparison
+        if line_no_ws == linetype || line_no_ws[0..end_idx] == linetype
+          return true
+        end
+      end
+      return false
     end
     final = []
     arr.each_with_index do |line, idx|
@@ -113,11 +127,9 @@ class HBHD
       @vars[varline[0].to_sym] = varline[1]
       return ''
     end
-    # Note the order here
     conversions = [
-      lambda { |x| remove_comments(x) },
-      lambda { |x| convert_heading(x) },
-      lambda { |x| convert_inline_pre(x) }
+      lambda { |x| inline_conversions(x) },
+      lambda { |x| convert_heading(x) }
     ]
     final = line
     conversions.each do |conv|
