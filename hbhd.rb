@@ -15,9 +15,10 @@ module RegexTimes
   def inline_conversions(line)
     # Note the order
     conversions = {
-      /\s*;;(.*)/ => '',                    # Comments
-      /`([^`]*)`/ => '<pre>\1</pre>',       # Inline code blocks
-      /\*([^\*]*)\*/ => '<em>\1</em>'       # Emphasized text
+      /\s*;;(.*)/ => '',                                  # Comments
+      /`([^`]*)`/ => '<pre>\1</pre>',                     # Inline code blocks
+      /\*([^\*]*)\*/ => '<em>\1</em>',                    # Emphasized text
+      /\[([^\]]+)\]\(([^\)]+)\)/ => '<a href="\2">\1</a>' # Anchor tags
     }
     final = line
     conversions.each do |regex_match, html_sub|
