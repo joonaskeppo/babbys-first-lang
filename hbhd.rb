@@ -11,7 +11,7 @@ module RegexTimes
     return line
   end
 
-  # Handle inline conversions
+  # Handle all inline conversions with regex
   def inline_conversions(line)
     # Note the order
     conversions = {
@@ -27,10 +27,16 @@ module RegexTimes
     return final
   end
 
-  # Grab variable of the form '@name: value'
-  def parse_var_line(line)
-    if line =~ /^@([a-z]*)\:\s*(.*)$/
-      return [$1, $2]
+  # Grab variable data of the form '@name: value'
+  def parse_varline(line)
+    if line =~ /^@(\w+)\:\s*(.*)$/
+      final = [$1, $2] # [key, val]
+      # Check for reserved keywords (currently only 'TIME')
+      if $2 =~ /TIME\((.*)\)/
+        time = Time.new
+        final[1] = time.strftime($1)
+      end
+      return final
     end
     return nil
   end
@@ -123,7 +129,7 @@ class HBHD
 
   # Parse and substitute text with regex
   def regex_handling(line)
-    varline = parse_var_line(line)
+    varline = parse_varline(line)
     if !varline.nil?
       @vars[varline[0].to_sym] = varline[1]
       return ''
