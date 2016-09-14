@@ -1,10 +1,18 @@
 #!/usr/bin/env ruby
 
 module RegexTimes
+  # Use backslashes to escape tokens
+  ESCAPE_CHAR = /(?<!\\)/
+  # A list of all tokens (these are escapable)
+  ALL_TOKENS = ['\#', '\@', '\>', '\;', '\*', '\`']
+  # If a line starts with one of these, it is ignored when looking at
+  # paragraph tag insertions (<p> and </p>)
+  NON_PARAGRAPH_LINES = ['#', '@', '>', ';;', '']
+
   private
   # Markdown-esque headings: #, ##, ... -> <h1>...</h1>, <h2>...</h2>, ...
   def convert_heading(line)
-    if line =~ /(#+)\s*(.*)/
+    if line =~ /#{ESCAPE_CHAR}(#+)\s*(.*)/
       heading = "h#{$1.length}"
       return "<#{heading}>#{$2}</#{heading}>"
     end
@@ -22,9 +30,15 @@ module RegexTimes
     }
     final = line
     conversions.each do |regex_match, html_sub|
-      final = final.gsub(regex_match, html_sub)
+      final = final.gsub(/#{ESCAPE_CHAR}#{regex_match}/, html_sub)
     end
     return final
+  end
+
+  # Remove backslashes used to escape tokens (e.g. \# -> #)
+  def trim_escape_chars(line)
+    escapable = '(' + ALL_TOKENS.join('|') + ')'
+    return line.gsub(/\\(?=#{escapable})/, '')
   end
 
   # Grab variable data of the form '@name: value'
@@ -61,7 +75,6 @@ end
 class HBHD
   include RegexTimes
   attr_reader :vars, :args
-  NON_PARAGRAPH_LINES = ['#', '@', '>', ';;', '']
 
   private
   def read_file(path)
@@ -134,9 +147,11 @@ class HBHD
       @vars[varline[0].to_sym] = varline[1]
       return ''
     end
+    # Note the order here
     conversions = [
       lambda { |x| inline_conversions(x) },
-      lambda { |x| convert_heading(x) }
+      lambda { |x| convert_heading(x) },
+      lambda { |x| trim_escape_chars(x) }
     ]
     final = line
     conversions.each do |conv|

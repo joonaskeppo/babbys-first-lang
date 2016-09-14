@@ -13,3 +13,6 @@ Testing `code also` here.
 
 OK cool. Also this is *emphasized here* with &lt;em&gt; tags
 This is a [test link](https://google.com) and also [this](http://gitlab.com).
+
+\# This line starts with a reserved token, so we escape it with a backslash.
+This is \`also\` escaped.
