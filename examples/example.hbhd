@@ -1,0 +1,13 @@
+;; these are 'variables'
+@author: /u/keppo
+@title: First post pls ignore
+@template: base.html
+
+# Main heading ;; this will be ignored
+
+This is some text.
+Testing `code also` here.
+
+## Subheadings also work
+
+OK cool.
