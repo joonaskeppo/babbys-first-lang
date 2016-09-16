@@ -1,82 +1,95 @@
 #!/usr/bin/env ruby
 
+# Handle regex-related tasks
 module RegexTimes
   # Use backslashes to escape tokens
   ESCAPE_CHAR = /(?<!\\)/
   # A list of all tokens (these are escapable)
-  ALL_TOKENS = ['\#', '\@', '\>', '\;', '\*', '\`']
+  ALL_TOKENS = ['\#', '\@', '\>', '\;', '\*', '\`'].freeze
   # If a line starts with one of these, it is ignored when looking at
   # paragraph tag insertions (<p> and </p>)
-  NON_PARAGRAPH_LINES = ['#', '@', '>', ';;', '']
+  NON_PARAGRAPH_LINES = ['#', '@', '>', ';;', ''].freeze
+  # All inline regex substitutions
+  SUBSTITUTIONS = {
+    /\s*;;(.*)/ => '',                                  # Comments
+    /`([^`]*)`/ => '<pre>\1</pre>',                     # Inline code blocks
+    /\*([^\*]*)\*/ => '<em>\1</em>',                    # Emphasized text
+    /\[([^\]]+)\]\(([^\)]+)\)/ => '<a href="\2">\1</a>' # Anchor tags
+  }.freeze
 
   private
+
   # Markdown-esque headings: #, ##, ... -> <h1>...</h1>, <h2>...</h2>, ...
   def convert_heading(line)
     if line =~ /#{ESCAPE_CHAR}(#+)\s*(.*)/
-      heading = "h#{$1.length}"
-      return "<#{heading}>#{$2}</#{heading}>"
+      size = Regexp.last_match[1].length
+      text = Regexp.last_match[2]
+      heading = "h#{size}"
+      return "<#{heading}>#{text}</#{heading}>"
     end
-    return line
+    line
   end
 
   # Handle all inline conversions with regex
   def inline_conversions(line)
-    # Note the order
-    conversions = {
-      /\s*;;(.*)/ => '',                                  # Comments
-      /`([^`]*)`/ => '<pre>\1</pre>',                     # Inline code blocks
-      /\*([^\*]*)\*/ => '<em>\1</em>',                    # Emphasized text
-      /\[([^\]]+)\]\(([^\)]+)\)/ => '<a href="\2">\1</a>' # Anchor tags
-    }
-    final = line
-    conversions.each do |regex_match, html_sub|
-      final = final.gsub(/#{ESCAPE_CHAR}#{regex_match}/, html_sub)
+    SUBSTITUTIONS.each do |regex_match, html_sub|
+      line.gsub!(/#{ESCAPE_CHAR}#{regex_match}/, html_sub)
     end
-    return final
+    line
   end
 
   # Remove backslashes used to escape tokens (e.g. \# -> #)
   def trim_escape_chars(line)
     escapable = '(' + ALL_TOKENS.join('|') + ')'
-    return line.gsub(/\\(?=#{escapable})/, '')
+    line.gsub(/\\(?=#{escapable})/, '')
+  end
+
+  # Parse for keywords (e.g. TIME)
+  def parse_keywords(value)
+    # TODO: loop over all keywords
+    if value =~ /TIME\((.*)\)/
+      time_format = Regexp.last_match[1]
+      value = Time.new.strftime(time_format)
+    end
+    value
   end
 
   # Grab variable data of the form '@name: value'
   def parse_varline(line)
+    var = nil
     if line =~ /^@(\w+)\:\s*(.*)$/
-      final = [$1, $2] # [key, val]
+      var = {
+        name: Regexp.last_match[1],
+        value: Regexp.last_match[2]
+      }
       # Check for reserved keywords (currently only 'TIME')
-      if $2 =~ /TIME\((.*)\)/
-        time = Time.new
-        final[1] = time.strftime($1)
-      end
-      return final
+      var[:value] = parse_keywords(var[:value])
     end
-    return nil
+    var
   end
 
   # Merge @vars (with content and sans template) with template HTML string
   def merge_with_template(template, args)
-    return (args.keys).inject(template) do |r, i|
-       r.gsub(/\{\{#{i.to_s}\}\}/, args[i])
+    args.keys.inject(template) do |r, i|
+      r.gsub(/\{\{#{i.to_s}\}\}/, args[i])
     end
   end
 
-  # Grab path to filepath (e.g. path/to/file -> path/to/)
-  def get_file_dir(filepath)
-    if filepath =~ /^((.*\/)[^\/]+|[^\/]+)$/
-      # Return directory (sans file name)
-      return $2
-    end
-    raise "Invalid path: #{filepath}"
+  # Handle all regex and other operations
+  def handle_operations(line)
+    [
+      -> (x) { inline_conversions(x) },
+      -> (x) { convert_heading(x) },
+      -> (x) { trim_escape_chars(x) }
+    ].each { |conv| line = conv.call(line) }
+    line
   end
 end
 
-class HBHD
-  include RegexTimes
-  attr_reader :vars, :args
-
+# Various utility functions for the main HBHD class
+module Utils
   private
+
   def read_file(path)
     str = ''
     f = File.open(path, 'r')
@@ -84,110 +97,107 @@ class HBHD
       str += line
     end
     f.close
-    return str
+    str
   end
 
+  # Parse cli ARGV params (required: src, optional: output)
   def parse_args
-    # ARGV params:
-    # - src is required
-    # - output is optional
-    if ![1, 2].include?(ARGV.length)
+    unless [1, 2].include?(ARGV.length)
       puts "Usage: #{__FILE__} src [output]"
       exit
     end
-    path = ARGV[0]
-    output = ARGV[1] || ARGV[0].sub(/\..*/, '.html') # TODO: currently not used!
-    # Get src lines
-    src = read_file(path)
-    # Return info about args
-    return {
-      path: path,
-      src: src.split("\n"),
-      output: output
+    {
+      path: ARGV[0], # Path to src file
+      output: ARGV[1] || ARGV[0].sub(/\..*/, '.html'), # Path to output file
+      src: read_file(ARGV[0]).split("\n") # src file content
     }
   end
 
+  # Grab path to filepath (e.g. path/to/file -> path/to/)
+  def get_file_dir(filepath)
+    if filepath =~ %r{^((.*\/)[^\/]+|[^\/]+)$}
+      # Return directory (sans file name)
+      return Regexp.last_match[2]
+    end
+    raise "Invalid path: #{filepath}"
+  end
+end
+
+# Main program logic goes under this class
+class HBHD
+  include RegexTimes
+  include Utils
+  attr_reader :vars, :args
+
+  private
+
+  # Should line be ignored when tagging with <p> and </p>?
+  def paragraph?(line)
+    NON_PARAGRAPH_LINES.each do |linetype|
+      end_idx = linetype.length - 1 # Used to compare linetypes
+      line_no_ws = line.strip # Remove leading whitespace
+      # For empty lines, end_idx is -1, hence the first comparison
+      if line_no_ws == linetype || line_no_ws[0..end_idx] == linetype
+        return false
+      end
+    end
+    true
+  end
+
   # Add paragraph (<p>, </p>) tags at appropriate points
-  def add_paragraph_tags(arr)
-    # Checks if line should be ignored wrt. paragraph tags
-    def ignore_line?(line)
-      NON_PARAGRAPH_LINES.each do |linetype|
-        end_idx = linetype.length - 1    # Used to compare linetypes
-        line_no_ws = line.strip          # Remove leading whitespace
-        # For empty lines, end_idx is -1, hence the first comparison
-        if line_no_ws == linetype || line_no_ws[0..end_idx] == linetype
-          return true
-        end
-      end
-      return false
-    end
+  def add_paragraph_tags(lines)
     final = []
-    arr.each_with_index do |line, idx|
-      # Ignore "special" and empty lines
-      if ignore_line?(line)
+    lines.each_with_index do |line, idx|
+      if paragraph?(line)
+        p line
+        final.push('<p>') if idx.zero? || !paragraph?(lines[idx - 1])
         final.push(line)
-        next
-      end
-      # Handle paragraph lines
-      if idx == 0 || ignore_line?(arr[idx - 1])
-        final.push("<p>")
-      end
-      final.push(line)
-      if idx == (arr.length - 1) || ignore_line?(arr[idx + 1])
-        final.push("</p>")
+        final.push('</p>') if line == lines.last || !paragraph?(lines[idx + 1])
+      else
+        final.push(line)
       end
     end
-    return final
+    final
   end
 
   # Parse and substitute text with regex
   def regex_handling(line)
-    varline = parse_varline(line)
-    if !varline.nil?
-      @vars[varline[0].to_sym] = varline[1]
+    var = parse_varline(line)
+    unless var.nil?
+      @vars[var[:name].to_sym] = var[:value]
       return ''
     end
-    # Note the order here
-    conversions = [
-      lambda { |x| inline_conversions(x) },
-      lambda { |x| convert_heading(x) },
-      lambda { |x| trim_escape_chars(x) }
-    ]
-    final = line
-    conversions.each do |conv|
-      final = conv.call(final)
-    end
-    return final
+    # Regex and other substitutions
+    handle_operations(line)
   end
 
   # Handle the merging of parsed data with template string (read from file)
   def do_templating
     tmpl = @vars[:template]
-    if tmpl.nil?
-      raise "No template file provided!"
-    end
+    raise 'No template file provided' if tmpl.nil?
     # Find what directory the source file is located in
     filepath = @args[:path] ? get_file_dir(@args[:path]) : ''
     @template = read_file(filepath + tmpl)
     passable_args = @vars.dup
     passable_args.delete(:template)
     passable_args[:content] = @content.join("\n")
-    return merge_with_template(@template, passable_args)
+    merge_with_template(@template, passable_args)
   end
 
   public
+
   # Handle the entire conversion process
   def convert
     lines = @args[:src]
     final = add_paragraph_tags(lines)
     @content = final.collect { |line| regex_handling(line) }
                     .select { |line| line != '' }
-    return do_templating
+    do_templating
   end
 
-  def initialize(src=[])
+  def initialize(src = [])
     @vars = {}
-    if src.length == 0
+    if src.length.zero?
       @args = parse_args
       return
     end
@@ -199,6 +209,4 @@ class HBHD
   end
 end
 
-if __FILE__ == $0
-  puts HBHD.new.convert
-end
+puts HBHD.new.convert if __FILE__ == $PROGRAM_NAME
