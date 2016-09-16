@@ -12,10 +12,10 @@ def report(hbhd)
 end
 
 class TestExampleInputs < Test::Unit::TestCase
-
   def test_example
     test_src = [
       '@author: /u/keppo',
+      '@template: ../examples/base.html',
       'This is some text.',
       '#Test heading',
       '##     This is a subheading',
@@ -33,6 +33,7 @@ class TestExampleInputs < Test::Unit::TestCase
 
   def test_comments
     test_src = [
+      '@template: ../examples/base.html',
       ';;comment',
       'Test `code` with ;; comments here',
       '## This is seen ;; and this is not'

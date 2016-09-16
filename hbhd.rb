@@ -149,7 +149,6 @@ class HBHD
     final = []
     lines.each_with_index do |line, idx|
       if paragraph?(line)
-        p line
         final.push('<p>') if idx.zero? || !paragraph?(lines[idx - 1])
         final.push(line)
         final.push('</p>') if line == lines.last || !paragraph?(lines[idx + 1])
