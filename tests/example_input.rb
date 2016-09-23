@@ -42,4 +42,17 @@ class TestExampleInputs < Test::Unit::TestCase
     report(hbhd)
   end
 
+  def test_multi_paragraphs
+    test_src = [
+      '@template: ../examples/base.html',
+      '',
+      'This is the first paragraph.',
+      'Part of first paragraph.',
+      '',
+      'Second paragraph here.',
+      'More of second paragraph'
+    ]
+    hbhd = HBHD.new(test_src)
+    report(hbhd)
+  end
 end

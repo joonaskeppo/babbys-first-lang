@@ -5,10 +5,10 @@ module RegexTimes
   # Use backslashes to escape tokens
   ESCAPE_CHAR = /(?<!\\)/
   # A list of all tokens (these are escapable)
-  ALL_TOKENS = ['\#', '\@', '\>', '\;', '\*', '\`'].freeze
+  ALL_TOKENS = %w(\# \@ \> \; \* \`).freeze
   # If a line starts with one of these, it is ignored when looking at
   # paragraph tag insertions (<p> and </p>)
-  NON_PARAGRAPH_LINES = ['#', '@', '>', ';;', ''].freeze
+  NON_PARAGRAPH_LINES = %w(# @ > ;;).unshift('').freeze
   # All inline regex substitutions
   SUBSTITUTIONS = {
     /\s*;;(.*)/ => '',                                  # Comments
@@ -189,6 +189,7 @@ class HBHD
   def convert
     lines = @args[:src]
     final = add_paragraph_tags(lines)
+    # p final
     @content = final.collect { |line| regex_handling(line) }
                     .select { |line| line != '' }
     do_templating
