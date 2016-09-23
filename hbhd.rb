@@ -12,7 +12,7 @@ module RegexTimes
   # All inline regex substitutions
   SUBSTITUTIONS = {
     /\s*;;(.*)/ => '',                                  # Comments
-    /`([^`]*)`/ => '<pre>\1</pre>',                     # Inline code blocks
+    /`([^`]*)`/ => '<code>\1</code>',                   # Inline code blocks
     /\*([^\*]*)\*/ => '<em>\1</em>',                    # Emphasized text
     /\[([^\]]+)\]\(([^\)]+)\)/ => '<a href="\2">\1</a>' # Anchor tags
   }.freeze
